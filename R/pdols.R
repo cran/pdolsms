@@ -53,18 +53,21 @@ pdols <- function(formula, data, index, p, icase = c("noconstant", "constant", "
   if (!is.character(index) | (length(index) < 2)) stop("Please specify a vector of two strings for the individual and the time column names")
   if (!all(table(data[,index]) == 1)) stop("The data supplied must be a balanced panel with one observation for each individual for each period")
   if (any(is.na(data))) stop("The data supplied must be a balanced panel with one observation for each individual for each period, pdols does not know how to deal with missing values.")
+  if (!is.numeric(data[, index[2]])) stop("The time variable must be numeric. Please coerce it to this class.")
+  
   data <- cbind(data[, c(index, all.vars(formula)[1])], model.matrix(formula, data))
   colnames(data)[1:2] <- index
   data <- data[, !colnames(data) %in% "(Intercept)"]
-
-
+  
+  data <- data[order(data[index[2]], data[index[1]]), ]
+  
   ldata <- vector(mode = "list", length = NCOL(data) - 2)
   names(ldata) <- colnames(data)[3:NCOL(data)]  
   
   cn <- colnames(data)
   for (i in 1:length(ldata)) {
     vn <- cn[i + 2]
-    cformula <- paste(cn[1], "~", cn[2])
+    cformula <- paste(cn[2], "~", cn[1])
     
     ldata[[i]] <- as.matrix(dcast(data, formula(cformula), value.var = vn))
     rownames(ldata[[i]]) <- ldata[[i]][, 1]
@@ -120,7 +123,7 @@ pdols <- function(formula, data, index, p, icase = c("noconstant", "constant", "
 #' coef(result, type = "cte") 
 #' coef(result, type = "o") 
 
- 
+
 coef.pdols <- function(object, type = c("ordinary", "cte"), ...) {
   
   type <- match.arg(type)
@@ -129,7 +132,7 @@ coef.pdols <- function(object, type = c("ordinary", "cte"), ...) {
                                      rownames(object$`Pooled OLS ORD`)),
                  cte = setNames(object$`Pooled OLS CTE`[, 1],
                                 rownames(object$`Pooled OLS CTE`))
-                 )
+  )
   
   if (length(coef)) {
     return (coef)
@@ -169,7 +172,7 @@ print.pdols <- function(x, type = c("ordinary", "cte"), digits = max(3L, getOpti
   s <- switch(type,
               ordinary = "Ordinary DOLS Coefficients:",
               cte = "Common Time Effects Coefficients:"
-              )
+  )
   
   if (length(coef(x, type))) {
     cat(s, "\n")
@@ -177,7 +180,7 @@ print.pdols <- function(x, type = c("ordinary", "cte"), digits = max(3L, getOpti
   } else  {
     cat("Coefficients not found")
   }
-    cat("\n\n") 
+  cat("\n\n") 
   invisible(x)
 }
 
@@ -201,27 +204,35 @@ print.pdols <- function(x, type = c("ordinary", "cte"), digits = max(3L, getOpti
 #' summary(result) 
 
 summary.pdols <- function(object, ...) {
-cat("
-________________________________________________
-Reference: 
-Mark, Nelson C., and Donggyu Sul. 
-'Cointegration Vector Estimation by 
-Panel DOLS and Long-run Money Demand.' 
-Oxford Bulletin of Economics and Statistics 65.5 
-(2003): 655-680.
-________________________________________________\n\n")
-
+  
+  icase <- match.arg(object$args$icase, choices = c("noconstant", "constant", "trend"))
+  icase <- switch(icase,
+                  noconstant = 1,
+                  constant = 2,
+                  trend = 3)
+  
+  
+  cat("
+      ________________________________________________
+      Reference: 
+      Mark, Nelson C., and Donggyu Sul. 
+      'Cointegration Vector Estimation by 
+      Panel DOLS and Long-run Money Demand.' 
+      Oxford Bulletin of Economics and Statistics 65.5 
+      (2003): 655-680.
+      ________________________________________________\n\n")
+  
   cat("S.E. Andrews : Standard error based on Andrews and Monahan's Pre-whitening method\n")
   cat("S.E. Param   : Standard error based on parametric correction\n\n\n")
-
+  
   cat("Call:\n")
   print(object$call, quote = FALSE)
   cat("\n\n\n")
   
-  if (object$args$icase == 2) {
+  if (icase == 2) {
     cat("Model: y(it) = c(i) + A*X(it) + u(it)\n\n\n")
   }
-  if (object$args$icase == 3) {
+  if (icase == 3) {
     cat("Model: y(it) = c(i) + d(i)t + A*X(it) + u(it)\n\n\n")
   }
   
